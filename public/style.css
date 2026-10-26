@@ -165,13 +165,61 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .line.placeholder.sub2 span { font-size: .78rem; letter-spacing: .3em; color: var(--dim); }
 
 /* ---------------- 曲库 ---------------- */
+.lib-head { display: flex; align-items: baseline; justify-content: space-between; }
+
+#lib-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 12px 20px;
+  padding: 2px 4px 16px;
+}
+#lib-toolbar[hidden] { display: none; }
+.tb-flex { flex: 1; }
+
+.tb-btn {
+  background: none; border: 1px solid var(--line); color: var(--dim);
+  font: inherit; font-size: .75rem; letter-spacing: .3em;
+  padding: 7px 14px 7px 17px; cursor: pointer; white-space: nowrap;
+  transition: color .3s, border-color .3s, background .3s;
+}
+.tb-btn:hover { color: var(--ink); border-color: var(--dim); }
+.tb-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
+.tb-btn.danger:hover { border-color: var(--danger); }
+.tb-btn.arm { background: var(--danger); border-color: var(--danger); color: var(--bg); }
+
+.sel-all {
+  background: none; border: none; display: flex; align-items: center; gap: 10px;
+  font: inherit; font-size: .78rem; letter-spacing: .25em; color: var(--dim);
+  cursor: pointer; user-select: none; padding: 4px 2px;
+  transition: color .3s;
+}
+.sel-all:hover, .sel-all.on, .sel-all.part { color: var(--ink); }
+.sel-count { font-size: .78rem; color: var(--dim); letter-spacing: .18em; font-variant-numeric: tabular-nums; }
+
+.cbox {
+  width: 13px; height: 13px; border: 1px solid var(--faint);
+  position: relative; display: inline-block; flex: none;
+  transition: border-color .3s;
+}
+.cbox::after {
+  content: ''; position: absolute; inset: 3px;
+  background: var(--ink); transform: scale(0);
+  transition: transform .22s ease;
+}
+.sel-all.on .cbox, .sel-all.part .cbox, .row.sel .cbox { border-color: var(--ink); }
+.sel-all.on .cbox::after, .row.sel .cbox::after { transform: scale(1); }
+.sel-all.part .cbox::after { transform: scale(.4); }
+
 .row {
-  display: grid; grid-template-columns: 92px 1fr 60px 58px 88px;
+  display: grid; grid-template-columns: 92px 1fr 60px 58px;
   align-items: center; gap: 16px;
   padding: 20px 4px; border-bottom: 1px solid var(--line);
   cursor: pointer; transition: background .3s, border-color .6s;
 }
 .row:hover { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+#view-library.editing .row.sel { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.r-check { display: none; align-items: center; }
+#view-library.editing .r-check { display: flex; }
+#view-library.editing .row { grid-template-columns: 40px 92px 1fr 60px 58px; }
 .r-no { font-size: .75rem; letter-spacing: .18em; color: var(--dim); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink); display: inline-block; flex: none; }
 .r-title { font-size: 1.05rem; line-height: 1.4; }
@@ -179,13 +227,6 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .r-lrc { font-size: .72rem; color: var(--dim); letter-spacing: .2em; white-space: nowrap; }
 .r-lrc.none { color: var(--faint); }
 .r-dur { font-size: .78rem; color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
-.r-del {
-  background: none; border: none; color: var(--faint);
-  font-size: .72rem; letter-spacing: .1em; cursor: pointer;
-  opacity: 0; transition: opacity .3s, color .3s; justify-self: end; white-space: nowrap;
-}
-.row:hover .r-del, .r-del.arm { opacity: 1; }
-.r-del:hover, .r-del.arm { color: var(--danger); }
 .empty { color: var(--dim); letter-spacing: .2em; padding: 70px 0; text-align: center; }
 
 /* ---------------- 入藏 ---------------- */
@@ -288,7 +329,8 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
   #lyrics-inner { padding: 24vh 6% 30vh; }
 
   #view-library.active, #view-upload.active { padding: 24px 20px 48px; }
-  .row { grid-template-columns: 64px 1fr 48px; }
+  .row { grid-template-columns: 64px 1fr; }
+  #view-library.editing .row { grid-template-columns: 30px 64px 1fr; }
   .r-lrc, .r-dur { display: none; }
 
   #playerbar { grid-template-columns: 1fr auto; gap: 10px 16px; padding: 10px 18px 14px; }

@@ -25,6 +25,12 @@
   const tTotal = $('#t-total');
   const playBtn = $('#playBtn');
   const toastEl = $('#toast');
+  const viewLib = $('#view-library');
+  const editBtn = $('#editBtn');
+  const libToolbar = $('#lib-toolbar');
+  const selAll = $('#sel-all');
+  const selCount = $('#sel-count');
+  const batchDel = $('#batch-del');
 
   const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
   const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>';
@@ -36,6 +42,9 @@
   let lines = [];
   let curLine = -1;
   let seeking = false;
+  let editing = false;
+  const selected = new Set();
+  let armTimer;
 
   /* ---------- 主题 ---------- */
   function setTheme(t, save = true) {
@@ -78,6 +87,7 @@
     if (d.songs) songs = d.songs;
     if (d.pendingLyrics) pending = d.pendingLyrics;
     if (currentId != null && idxOf(currentId) < 0) clearPlayer();
+    if (editing) for (const id of [...selected]) if (idxOf(id) < 0) selected.delete(id);
     renderLibrary();
     renderPending();
     renderLabel();
@@ -312,6 +322,7 @@
       return;
     }
     if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+    else if (e.key === 'Escape') setEditing(false);
     else if (e.key === 'ArrowRight') audio.currentTime = Math.min((audio.currentTime || 0) + 5, audio.duration || 0);
     else if (e.key === 'ArrowLeft') audio.currentTime = Math.max((audio.currentTime || 0) - 5, 0);
   });
@@ -319,14 +330,18 @@
   /* ---------- 曲库 ---------- */
   function renderLibrary() {
     if (!songs.length) {
+      if (editing) setEditing(false);
+      editBtn.hidden = true;
       songList.innerHTML = '<div class="empty">曲库暂无藏品 · 请前往「入藏」</div>';
       return;
     }
+    editBtn.hidden = editing;
     songList.innerHTML = songs
       .map((s, i) => {
         const now = s.id === currentId;
         return `
-        <div class="row${now ? ' now' : ''}" data-id="${s.id}">
+        <div class="row${now ? ' now' : ''}${selected.has(s.id) ? ' sel' : ''}" data-id="${s.id}">
+          <div class="r-check"><span class="cbox"></span></div>
           <div class="r-no">${now ? '<span class="dot"></span>' : ''}No.${pad2(i + 1)}</div>
           <div class="r-main">
             <div class="r-title">${esc(s.title)}</div>
@@ -334,31 +349,82 @@
           </div>
           <div class="r-lrc${s.hasLyrics ? '' : ' none'}">${s.hasLyrics ? '有词' : '无词'}</div>
           <div class="r-dur">${s.duration ? fmt(s.duration) : '—'}</div>
-          <button class="r-del" data-id="${s.id}">移除</button>
         </div>`;
       })
       .join('');
   }
 
-  songList.addEventListener('click', async (e) => {
+  /* 编辑模式:全选 / 多选 / 批量移除(二次确认) */
+  function setEditing(on) {
+    if (editing === on) return;
+    editing = on;
+    if (!on) selected.clear();
+    disarmBatch();
+    viewLib.classList.toggle('editing', on);
+    libToolbar.hidden = !on;
+    updateSelUI();
+    renderLibrary();
+  }
+
+  function updateSelUI() {
+    disarmBatch();
+    selAll.classList.toggle('on', !!songs.length && selected.size === songs.length);
+    selAll.classList.toggle('part', selected.size > 0 && selected.size < songs.length);
+    selCount.textContent = `已选 ${selected.size} / ${songs.length} 首`;
+  }
+
+  function toggleSel(id) {
+    if (!selected.delete(id)) selected.add(id);
+    updateSelUI();
+    renderLibrary();
+  }
+
+  function toggleAll() {
+    if (selected.size === songs.length) selected.clear();
+    else for (const s of songs) selected.add(s.id);
+    updateSelUI();
+    renderLibrary();
+  }
+
+  function disarmBatch() {
+    batchDel.classList.remove('arm');
+    batchDel.textContent = '移 除';
+    clearTimeout(armTimer);
+  }
+
+  async function removeSelected() {
+    if (!selected.size) { toast('请先选择要移除的曲目'); return; }
+    if (!batchDel.classList.contains('arm')) {
+      batchDel.classList.add('arm');
+      batchDel.textContent = `确认移除 ${selected.size} 首`;
+      clearTimeout(armTimer);
+      armTimer = setTimeout(disarmBatch, 3200);
+      return;
+    }
+    const ids = [...selected];
+    const n = ids.length;
+    disarmBatch();
+    try {
+      const r = await fetch('/api/songs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      applyData(await r.json());
+      toast(`已移除 ${n} 首`);
+    } catch { toast('移除失败'); }
+  }
+
+  editBtn.addEventListener('click', () => { if (songs.length) setEditing(true); });
+  $('#edit-done').addEventListener('click', () => setEditing(false));
+  selAll.addEventListener('click', toggleAll);
+  batchDel.addEventListener('click', removeSelected);
+
+  songList.addEventListener('click', (e) => {
     const row = e.target.closest('.row');
     if (!row) return;
     const id = Number(row.dataset.id);
-    const del = e.target.closest('.r-del');
-    if (del) {
-      if (del.classList.contains('arm')) {
-        try {
-          const r = await fetch('/api/songs/' + id, { method: 'DELETE' });
-          applyData(await r.json());
-          toast('已移除');
-        } catch { toast('删除失败'); }
-      } else {
-        del.classList.add('arm');
-        del.textContent = '确认移除';
-        setTimeout(() => { del.classList.remove('arm'); del.textContent = '移除'; }, 2500);
-      }
-      return;
-    }
+    if (editing) { toggleSel(id); return; }
     playById(id);
     show('player');
   });

@@ -113,6 +113,14 @@ app.delete('/api/songs/:id', (req, res) => {
   res.json({ ok: true, ...pubAll() });
 });
 
+// 批量移除,body: { "ids": [number] }
+app.delete('/api/songs', (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids)) return res.status(400).json({ error: '缺少 ids 数组' });
+  const removed = lib.removeSongs(ids);
+  res.json({ ok: true, removed, ...pubAll() });
+});
+
 app.delete('/api/lyrics/:lrcId', (req, res) => {
   lib.removePendingLyric(Number(req.params.lrcId));
   res.json({ ok: true, pendingLyrics: lib.pendingLyrics });

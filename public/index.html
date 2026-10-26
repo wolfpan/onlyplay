@@ -64,7 +64,17 @@
 
     <!-- 曲库 -->
     <section id="view-library" class="view">
-      <h2 class="view-title">曲&nbsp;库</h2>
+      <div class="lib-head">
+        <h2 class="view-title">曲&nbsp;库</h2>
+        <button id="editBtn" class="tb-btn">编&nbsp;辑</button>
+      </div>
+      <div id="lib-toolbar" hidden>
+        <button id="sel-all" class="sel-all"><span class="cbox"></span>全&nbsp;选</button>
+        <span id="sel-count" class="sel-count"></span>
+        <span class="tb-flex"></span>
+        <button id="batch-del" class="tb-btn danger">移&nbsp;除</button>
+        <button id="edit-done" class="tb-btn">完&nbsp;成</button>
+      </div>
       <div id="song-list"></div>
     </section>
 
