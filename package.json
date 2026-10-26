@@ -1,0 +1,16 @@
+{
+  "name": "onlyplay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ONLY PLAY — 美术馆式极简音乐播放器（局域网单用户）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.0.0",
+    "music-metadata": "^10.0.0"
+  }
+}
