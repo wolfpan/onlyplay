@@ -31,6 +31,7 @@
   const selAll = $('#sel-all');
   const selCount = $('#sel-count');
   const batchDel = $('#batch-del');
+  const coverBtn = $('#coverBtn');
 
   const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
   const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>';
@@ -332,16 +333,21 @@
     if (!songs.length) {
       if (editing) setEditing(false);
       editBtn.hidden = true;
+      coverBtn.hidden = true;
       songList.innerHTML = '<div class="empty">曲库暂无藏品 · 请前往「入藏」</div>';
       return;
     }
     editBtn.hidden = editing;
+    coverBtn.hidden = editing;
     songList.innerHTML = songs
       .map((s, i) => {
         const now = s.id === currentId;
         return `
         <div class="row${now ? ' now' : ''}${selected.has(s.id) ? ' sel' : ''}" data-id="${s.id}">
           <div class="r-check"><span class="cbox"></span></div>
+          <div class="r-cover">${s.hasCover
+            ? `<img src="/api/cover/${s.id}" alt="" loading="lazy">`
+            : `<span class="letter">${esc([...s.title][0] || '乐')}</span>`}</div>
           <div class="r-no">${now ? '<span class="dot"></span>' : ''}No.${pad2(i + 1)}</div>
           <div class="r-main">
             <div class="r-title">${esc(s.title)}</div>
@@ -427,6 +433,52 @@
     if (editing) { toggleSel(id); return; }
     playById(id);
     show('player');
+  });
+
+  /* ---------- 封面自动补全 ---------- */
+  let seenRun = -1;
+
+  function updateCoverBtn(st) {
+    if (st.running) {
+      coverBtn.hidden = editing;
+      coverBtn.disabled = true;
+      coverBtn.textContent = `补封面 ${st.done}/${st.total}`;
+    } else {
+      coverBtn.hidden = !songs.length || editing;
+      coverBtn.disabled = !st.missing;
+      coverBtn.textContent = '补 封 面';
+      // seenRun 只在空闲分支更新:从 -1 起步,页面加载中若撞上正在收尾的旧任务不误报
+      if (seenRun >= 0 && seenRun !== st.run && st.lastRun) {
+        refresh();
+        toast(`封面补全完成:${st.lastRun.ok} 张成功${st.lastRun.fail ? `,${st.lastRun.fail} 张未匹配` : ''}`);
+      }
+      seenRun = st.run;
+    }
+  }
+
+  async function pollCover() {
+    try {
+      const st = await (await fetch('/api/covers/status')).json();
+      if (st.running) refresh(); // 补全进行中,顺带刷新列表让新封面逐步出现
+      updateCoverBtn(st);
+    } catch {}
+  }
+  setInterval(pollCover, 2500);
+  pollCover();
+
+  coverBtn.addEventListener('click', async () => {
+    try {
+      const st = await (
+        await fetch('/api/covers/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        })
+      ).json();
+      if (!st.added) { toast(st.running ? '补全任务进行中' : '所有曲目都已有封面'); return; }
+      toast(`开始补全 ${st.added} 首封面`);
+      updateCoverBtn(st);
+    } catch { toast('操作失败'); }
   });
 
   /* ---------- 待配对歌词 ---------- */

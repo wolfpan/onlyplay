@@ -166,6 +166,7 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 
 /* ---------------- 曲库 ---------------- */
 .lib-head { display: flex; align-items: baseline; justify-content: space-between; }
+.lib-head-btns { display: flex; gap: 12px; }
 
 #lib-toolbar {
   display: flex; align-items: center; flex-wrap: wrap;
@@ -185,6 +186,8 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .tb-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, transparent); }
 .tb-btn.danger:hover { border-color: var(--danger); }
 .tb-btn.arm { background: var(--danger); border-color: var(--danger); color: var(--bg); }
+.tb-btn[disabled] { opacity: .45; cursor: default; }
+.tb-btn[disabled]:hover { color: var(--dim); border-color: var(--line); }
 
 .sel-all {
   background: none; border: none; display: flex; align-items: center; gap: 10px;
@@ -210,7 +213,7 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .sel-all.part .cbox::after { transform: scale(.4); }
 
 .row {
-  display: grid; grid-template-columns: 92px 1fr 60px 58px;
+  display: grid; grid-template-columns: 40px 92px 1fr 60px 58px;
   align-items: center; gap: 16px;
   padding: 20px 4px; border-bottom: 1px solid var(--line);
   cursor: pointer; transition: background .3s, border-color .6s;
@@ -219,7 +222,14 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 #view-library.editing .row.sel { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .r-check { display: none; align-items: center; }
 #view-library.editing .r-check { display: flex; }
-#view-library.editing .row { grid-template-columns: 40px 92px 1fr 60px 58px; }
+#view-library.editing .row { grid-template-columns: 40px 40px 92px 1fr 60px 58px; }
+.r-cover {
+  width: 40px; height: 40px; border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex: none;
+}
+.r-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.r-cover .letter { font-size: 18px; color: var(--faint); line-height: 1; }
 .r-no { font-size: .75rem; letter-spacing: .18em; color: var(--dim); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ink); display: inline-block; flex: none; }
 .r-title { font-size: 1.05rem; line-height: 1.4; }
@@ -329,8 +339,10 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
   #lyrics-inner { padding: 24vh 6% 30vh; }
 
   #view-library.active, #view-upload.active { padding: 24px 20px 48px; }
-  .row { grid-template-columns: 64px 1fr; }
-  #view-library.editing .row { grid-template-columns: 30px 64px 1fr; }
+  .row { grid-template-columns: 36px 64px 1fr; }
+  #view-library.editing .row { grid-template-columns: 30px 36px 64px 1fr; }
+  .r-cover { width: 36px; height: 36px; }
+  .r-cover .letter { font-size: 16px; }
   .r-lrc, .r-dur { display: none; }
 
   #playerbar { grid-template-columns: 1fr auto; gap: 10px 16px; padding: 10px 18px 14px; }

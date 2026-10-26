@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { Library } from './lib/library.js';
 import { parseLRC } from './lib/lrc.js';
+import { createCoverQueue } from './lib/cover-fetch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 3000);
@@ -13,6 +14,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 const lib = new Library(path.join(__dirname, 'data'));
 await lib.init();
+const coverQueue = createCoverQueue(lib);
 
 const app = express();
 app.disable('x-powered-by');
@@ -57,6 +59,8 @@ app.post('/api/upload', upload.array('files', 100), async (req, res) => {
     try {
       if (ext === '.mp3') {
         const song = await lib.addMp3(f.path, name);
+        // 无内嵌封面 → 后台自动联网补全,不拖慢上传响应
+        if (!song.coverFile) coverQueue.push([song.id]);
         results.push({ file: name, kind: 'mp3', ok: true, title: song.title, paired: !!song.lrc, songId: song.id });
       } else if (ext === '.lrc' || ext === '.txt') {
         const r = await lib.addLrc(f.path, name);
@@ -125,6 +129,18 @@ app.delete('/api/lyrics/:lrcId', (req, res) => {
   lib.removePendingLyric(Number(req.params.lrcId));
   res.json({ ok: true, pendingLyrics: lib.pendingLyrics });
 });
+
+// 封面自动补全:body { ids? } 省略即全部缺封面的曲目(含此前未匹配到的,可重试)
+app.post('/api/covers/fetch', (req, res) => {
+  const { ids } = req.body || {};
+  const target = Array.isArray(ids) && ids.length
+    ? ids.map(Number).filter((n) => lib.get(n))
+    : lib.songs.filter((s) => !s.coverFile).map((s) => s.id);
+  const added = coverQueue.push(target);
+  res.json({ ok: true, added, ...coverQueue.status() });
+});
+
+app.get('/api/covers/status', (req, res) => res.json(coverQueue.status()));
 
 // 统一错误出口
 app.use((err, req, res, next) => {
