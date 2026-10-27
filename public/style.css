@@ -49,26 +49,6 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
   outline: 1px solid var(--dim); outline-offset: 3px;
 }
 
-/* ---------------- 入口幕布 ---------------- */
-#curtain {
-  position: fixed; inset: 0; z-index: 50;
-  background: var(--bg);
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity .9s ease, visibility .9s;
-}
-#curtain.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
-.curtain-inner { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 26px; padding: 24px; }
-.curtain-mark { font-size: clamp(2.2rem, 5vw, 3.8rem); letter-spacing: .5em; text-indent: .5em; font-weight: 600; }
-.curtain-sub { color: var(--dim); letter-spacing: .35em; text-indent: .35em; font-size: .95rem; }
-#enterBtn {
-  margin-top: 10px; background: none; border: 1px solid var(--ink); color: var(--ink);
-  font: inherit; font-size: 1rem; letter-spacing: .5em; text-indent: .5em;
-  padding: 16px 72px; cursor: pointer;
-  transition: background .45s, color .45s;
-}
-#enterBtn:hover { background: var(--ink); color: var(--bg); }
-.curtain-hint { font-size: .72rem; color: var(--dim); letter-spacing: .2em; }
-
 /* ---------------- 顶栏 ---------------- */
 #topbar {
   flex: none;

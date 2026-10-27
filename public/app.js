@@ -7,8 +7,6 @@
 
   /* ---------- 元素 ---------- */
   const audio = $('#audio');
-  const curtain = $('#curtain');
-  const enterBtn = $('#enterBtn');
   const themeBtn = $('#themeBtn');
   const lyricsBox = $('#lyrics');
   const lyricsInner = $('#lyrics-inner');
@@ -60,6 +58,8 @@
   let openAlbumKey = null; // 专辑页当前打开的专辑名
   let pickerSongId = null; // 封面选择弹窗针对的曲目
   let playlistOpen = false; // 播放列表抽屉
+  let currentView = 'player'; // 当前视图,随 op-state 持久化
+  let pendingSeek = null; // 启动恢复时待跳转的进度(metadata 就绪后应用)
   const selected = new Set();
   let armTimer;
 
@@ -141,6 +141,7 @@
     renderPending();
     renderLabel();
     renderNowBar();
+    saveState();
   }
 
   async function refresh() {
@@ -153,12 +154,43 @@
   }
 
   /* ---------- 视图 ---------- */
+  // 持久化界面与播放状态(曲目 id 另存于 op-last),刷新后原样恢复
+  function saveState() {
+    try {
+      localStorage.setItem('op-state', JSON.stringify({
+        view: currentView,
+        album: openAlbumKey,
+        libMode,
+        position: currentId != null ? Math.floor(audio.currentTime || 0) : 0,
+        playing: currentId != null && !audio.paused,
+      }));
+    } catch {}
+  }
+
   function show(v) {
+    currentView = v;
     $$('.view').forEach((x) => x.classList.toggle('active', x.id === 'view-' + v));
     $$('.navlink').forEach((b) => b.classList.toggle('on', b.dataset.view === v));
+    saveState();
   }
   $$('.navlink').forEach((b) => b.addEventListener('click', () => show(b.dataset.view)));
-  show('player');
+
+  // 自动播放策略:被拦截时挂一次性手势监听,用户任意点击/按键后续播
+  let resumeArmed = false;
+  function tryResume() {
+    audio.play().catch(() => {
+      if (resumeArmed) return;
+      resumeArmed = true;
+      const go = () => {
+        window.removeEventListener('pointerdown', go);
+        window.removeEventListener('keydown', go);
+        resumeArmed = false;
+        if (currentId != null) audio.play().catch(() => {});
+      };
+      window.addEventListener('pointerdown', go);
+      window.addEventListener('keydown', go);
+    });
+  }
 
   /* ---------- 播放 ---------- */
   function playById(id) {
@@ -338,12 +370,16 @@
 
   /* ---------- 渲染驱动 ----------
      以 timeupdate 为主（后台标签页也会触发），rAF 仅在前台做进度条平滑 */
+  let lastPosSave = 0;
   function tick() {
     if (!seeking) updateProgress();
     updateLine();
+    const now = Date.now();
+    if (now - lastPosSave > 5000) { lastPosSave = now; saveState(); } // 播放进度节流落盘
   }
   audio.addEventListener('timeupdate', tick);
   document.addEventListener('visibilitychange', tick);
+  window.addEventListener('beforeunload', saveState);
   (function loop() {
     if (!document.hidden && !audio.paused && !seeking) {
       updateProgress();
@@ -355,10 +391,15 @@
   /* ---------- 播放事件 ---------- */
   audio.addEventListener('loadedmetadata', () => {
     tTotal.textContent = fmt(audio.duration);
+    if (pendingSeek != null) {
+      // 恢复上次进度;曲目若已换新,避免 Seek 到末尾
+      audio.currentTime = Math.min(pendingSeek, Math.max(0, (audio.duration || 0) - 1));
+      pendingSeek = null;
+    }
     updateProgress();
   });
-  audio.addEventListener('play', () => { playBtn.innerHTML = ICON_PAUSE; });
-  audio.addEventListener('pause', () => { playBtn.innerHTML = ICON_PLAY; });
+  audio.addEventListener('play', () => { playBtn.innerHTML = ICON_PAUSE; saveState(); });
+  audio.addEventListener('pause', () => { playBtn.innerHTML = ICON_PLAY; saveState(); });
   audio.addEventListener('ended', () => step(1));
   audio.addEventListener('error', () => {
     if (currentId != null) toast('该文件无法播放');
@@ -410,15 +451,6 @@
     if (row) playById(Number(row.dataset.id)); // 抽屉保持展开,便于连续选曲
   });
 
-  /* ---------- 入口幕布 ---------- */
-  enterBtn.addEventListener('click', () => {
-    curtain.classList.add('hidden');
-    setTimeout(() => curtain.remove(), 1000);
-    if (!songs.length) { show('upload'); return; }
-    if (currentId == null) { playById(songs[0].id); return; }
-    audio.play().catch(() => {});
-  });
-
   /* ---------- 键盘 ---------- */
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, select, textarea')) return;
@@ -427,10 +459,6 @@
       return;
     }
     if (playlistOpen && e.key === 'Escape') { closePlaylist(); return; }
-    if (document.contains(curtain)) {
-      if (e.key === 'Enter') enterBtn.click();
-      return;
-    }
     if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
     else if (e.key === 'Escape') setEditing(false);
     else if (e.key === 'ArrowRight') audio.currentTime = Math.min((audio.currentTime || 0) + 5, audio.duration || 0);
@@ -501,6 +529,7 @@
     modeAlbums.classList.toggle('on', m === 'albums');
     if (m === 'albums' && editing) setEditing(false);
     renderLibrary();
+    saveState();
   }
   modeSongs.addEventListener('click', () => setLibMode('songs'));
   modeAlbums.addEventListener('click', () => setLibMode('albums'));
@@ -646,7 +675,7 @@
   }
 
   albWrap.addEventListener('click', (e) => {
-    if (e.target.closest('#alb-back')) { openAlbumKey = null; renderAlbums(); return; }
+    if (e.target.closest('#alb-back')) { openAlbumKey = null; renderAlbums(); saveState(); return; }
     if (e.target.closest('#alb-playall')) {
       const a = openAlbumKey && albumByKey(openAlbumKey);
       if (a) enterQueue(a);
@@ -658,6 +687,7 @@
       if (!a) return;
       openAlbumKey = a.name;
       renderAlbums();
+      saveState();
       enterQueue(a); // 点击专辑即进入专辑播放
       return;
     }
@@ -971,19 +1001,31 @@
     h('nexttrack', () => step(1));
   }
 
-  /* ---------- 启动 ---------- */
+  /* ---------- 启动:恢复上次界面与播放状态 ----------
+     曲目 id 在 op-last,界面/进度/播放中标记在 op-state;
+     首次使用(无记录)进入「专辑」页。 */
   (async function init() {
+    // 先读状态再拉数据:applyData 会触发 saveState,顺序反了会把默认视图写进存储
+    let st = null;
+    try { st = JSON.parse(localStorage.getItem('op-state') || 'null'); } catch {}
+    const first = !st;
     await refresh();
     const last = Number(localStorage.getItem('op-last')) || null;
-    const s = songs.find((x) => x.id === last) || songs[0];
+    const s = songs.find((x) => x.id === last);
     if (s) {
       currentId = s.id;
       audio.src = `/audio/${s.id}`;
+      if (st && st.position > 0) pendingSeek = st.position;
       loadLyrics(s.id);
+      if (st && st.playing) tryResume();
     } else {
       loadLyrics(null);
     }
+    if (!songs.length) { show('upload'); return; }
     renderLabel();
     renderNowBar();
+    if (st && st.libMode === 'albums') setLibMode('albums');
+    if (st && st.album) { openAlbumKey = st.album; renderAlbums(); }
+    show(first ? 'albums' : (st.view || 'player'));
   })();
 })();
