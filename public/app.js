@@ -217,7 +217,7 @@
       : '';
     const cover = $('#p-cover');
     if (s && s.hasCover) {
-      $('#p-cover-img').src = `/api/cover/${s.id}`;
+      $('#p-cover-img').src = coverURL(s);
       cover.dataset.mode = 'img';
     } else {
       $('#p-cover-letter').textContent = [...(s ? s.title : '乐')][0] || '乐';
@@ -383,13 +383,16 @@
   });
 
   /* ---------- 曲库 ---------- */
-  const coverHTML = (id, has, letter) =>
-    has ? `<img src="/api/cover/${id}" alt="" loading="lazy">` : `<span class="letter">${esc(letter)}</span>`;
+  // 封面地址带版本号:换封面后 URL 变化,穿透浏览器缓存(服务端 max-age 7 天)
+  const coverURL = (s) => `/api/cover/${s.id}?v=${s.coverV || 0}`;
+
+  const coverHTML = (s, letter) =>
+    s?.hasCover ? `<img src="${coverURL(s)}" alt="" loading="lazy">` : `<span class="letter">${esc(letter)}</span>`;
 
   const songRowHTML = (s, no, { bare = false, selectable = false } = {}) => `
     <div class="row${bare ? ' bare' : ''}${s.id === currentId ? ' now' : ''}${selectable && selected.has(s.id) ? ' sel' : ''}" data-id="${s.id}">
       ${selectable ? '<div class="r-check"><span class="cbox"></span></div>' : ''}
-      ${bare ? '' : `<div class="r-cover">${coverHTML(s.id, s.hasCover, [...s.title][0] || '乐')}</div>`}
+      ${bare ? '' : `<div class="r-cover">${coverHTML(s, [...s.title][0] || '乐')}</div>`}
       <div class="r-no">${s.id === currentId ? '<span class="dot"></span>' : ''}No.${pad2(no)}</div>
       <div class="r-main">
         <div class="r-title">${esc(s.title)}</div>
@@ -426,7 +429,7 @@
         return `
         <div class="alg-group" data-key="${esc(a.name)}">
           <div class="alg-head">
-            <div class="alg-cover">${coverHTML(cov ? cov.id : '', !!cov, [...a.name][0] || '乐')}</div>
+            <div class="alg-cover">${coverHTML(cov, [...a.name][0] || '乐')}</div>
             <div class="alg-info">
               <div class="alg-name">${esc(a.name)}</div>
               <div class="alg-sub">${esc(a.artist || '未知艺术家')} · ${a.tracks.length} 首</div>
@@ -563,7 +566,7 @@
             const cov = x.tracks.find((t) => t.hasCover);
             return `
             <div class="alb-card" data-key="${esc(x.name)}">
-              <div class="alb-cover">${coverHTML(cov ? cov.id : '', !!cov, [...x.name][0] || '乐')}</div>
+              <div class="alb-cover">${coverHTML(cov, [...x.name][0] || '乐')}</div>
               <div class="alb-name">${esc(x.name)}</div>
               <div class="alb-sub">${esc(x.artist || '未知艺术家')} · ${x.tracks.length} 首</div>
             </div>`;
@@ -577,7 +580,7 @@
     albWrap.innerHTML =
       '<div class="lib-head"><h2 class="view-title">专&nbsp;辑</h2><button class="tb-btn" id="alb-back">返&nbsp;回</button></div>' +
       `<div class="alb-head">
-        <div class="alb-bigcover">${coverHTML(cov ? cov.id : '', !!cov, [...a.name][0] || '乐')}</div>
+        <div class="alb-bigcover">${coverHTML(cov, [...a.name][0] || '乐')}</div>
         <div class="alb-headinfo">
           <div class="alb-name">${esc(a.name)}</div>
           <div class="alb-sub">${esc(a.artist || '未知艺术家')} · ${a.tracks.length} 首 · ${fmt(dur)}</div>
@@ -708,7 +711,7 @@
     const cur = songs.find((x) => x.id === id);
     const curHTML = cur?.hasCover
       ? `<div class="cp-group"><div class="cp-src">当前封面</div>` +
-        `<div class="cp-strip"><span class="cp-cand cur" title="正在使用"><img src="/api/cover/${id}" alt=""></span></div></div>`
+        `<div class="cp-strip"><span class="cp-cand cur" title="正在使用"><img src="${coverURL(cur)}" alt=""></span></div></div>`
       : '';
     if (!groups.length) {
       cpBody.innerHTML = curHTML + '<div class="cp-empty">各来源都没有搜到候选,可直接上传图片</div>';
@@ -899,7 +902,7 @@
         title: s.title,
         artist: s.artist || '未知艺术家',
         album: s.album || 'ONLY PLAY',
-        artwork: s.hasCover ? [{ src: `/api/cover/${s.id}`, sizes: '512x512' }] : [],
+        artwork: s.hasCover ? [{ src: coverURL(s), sizes: '512x512' }] : [],
       });
     } catch {}
   }

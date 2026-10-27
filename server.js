@@ -32,6 +32,7 @@ const pubSong = (s, i) => ({
   duration: s.duration,
   hasCover: !!s.coverFile,
   hasLyrics: !!s.lrc,
+  coverV: s.coverV || 0,
 });
 
 const pubAll = () => ({
