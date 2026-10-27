@@ -35,6 +35,11 @@
   const selCount = $('#sel-count');
   const batchDel = $('#batch-del');
   const coverBtn = $('#coverBtn');
+  const coverPicker = $('#cover-picker');
+  const cpSong = $('#cp-song');
+  const cpBody = $('#cp-body');
+  const cpUploadBtn = $('#cp-upload-btn');
+  const cpFile = $('#cp-file');
 
   const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
   const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5h3v14H8zM13 5h3v14h-3z"/></svg>';
@@ -50,6 +55,7 @@
   let queue = null; // 专辑播放队列:null = 全部曲目顺序播放
   let libMode = 'songs'; // 曲库视图:songs | albums
   let openAlbumKey = null; // 专辑页当前打开的专辑名
+  let pickerSongId = null; // 封面选择弹窗针对的曲目
   const selected = new Set();
   let armTimer;
 
@@ -362,6 +368,10 @@
   /* ---------- 键盘 ---------- */
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, select, textarea')) return;
+    if (!coverPicker.hidden) {
+      if (e.key === 'Escape') closeCoverPicker();
+      return;
+    }
     if (document.contains(curtain)) {
       if (e.key === 'Enter') enterBtn.click();
       return;
@@ -520,6 +530,8 @@
     if (!row) return;
     const id = Number(row.dataset.id);
     if (editing) { toggleSel(id); return; }
+    // 入口二:曲库行首的小封面,点击管理封面而非播放
+    if (libMode === 'songs' && e.target.closest('.r-cover')) { openCoverPicker(id); return; }
     if (libMode === 'albums') {
       const g = row.closest('.alg-group');
       const a = g && albumByKey(g.dataset.key);
@@ -658,6 +670,118 @@
       toast(`开始补全 ${st.added} 首封面`);
       updateCoverBtn(st);
     } catch { toast('操作失败'); }
+  });
+
+  /* ---------- 封面选择(三源候选 + 自行上传) ---------- */
+  const PROVIDER_NAMES = { qq: 'QQ 音乐', itunes: 'iTunes', netease: '网易云' };
+
+  function openCoverPicker(id) {
+    const s = songs.find((x) => x.id === id);
+    if (!s) return;
+    pickerSongId = id;
+    cpSong.innerHTML =
+      `<span class="cp-song-title">${esc(s.title)}</span>` +
+      `<span class="cp-song-sub">${esc(s.artist || '未知艺术家')}${s.album ? ' · ' + esc(s.album) : ''}</span>`;
+    cpBody.innerHTML = '<div class="cp-loading">正在搜索候选封面 …</div>';
+    coverPicker.hidden = false;
+    loadCoverCandidates(id);
+  }
+
+  function closeCoverPicker() {
+    coverPicker.hidden = true;
+    pickerSongId = null;
+  }
+
+  async function loadCoverCandidates(id) {
+    try {
+      const r = await fetch(`/api/covers/search/${id}`);
+      const d = await r.json();
+      if (pickerSongId !== id) return; // 期间已关闭或换曲
+      if (!r.ok) throw new Error(d.error || '搜索失败');
+      renderCandidates(id, d.groups || []);
+    } catch {
+      if (pickerSongId === id) cpBody.innerHTML = '<div class="cp-empty">候选获取失败,请重试或直接上传图片</div>';
+    }
+  }
+
+  function renderCandidates(id, groups) {
+    const cur = songs.find((x) => x.id === id);
+    const curHTML = cur?.hasCover
+      ? `<div class="cp-group"><div class="cp-src">当前封面</div>` +
+        `<div class="cp-strip"><span class="cp-cand cur" title="正在使用"><img src="/api/cover/${id}" alt=""></span></div></div>`
+      : '';
+    if (!groups.length) {
+      cpBody.innerHTML = curHTML + '<div class="cp-empty">各来源都没有搜到候选,可直接上传图片</div>';
+      return;
+    }
+    cpBody.innerHTML =
+      curHTML +
+      groups
+        .map((g) => {
+          const soft = g.items.some((c) => c.matched) ? '' : '<span class="cp-soft">· 未精确匹配</span>';
+          return `
+        <div class="cp-group">
+          <div class="cp-src">${PROVIDER_NAMES[g.provider] || esc(g.provider)}${soft}</div>
+          <div class="cp-strip">
+            ${g.items
+              .map(
+                (c) => `
+            <button class="cp-cand${c.matched ? '' : ' soft'}" data-url="${esc(c.url)}"
+              title="${esc([c.artist, c.title].filter(Boolean).join(' - '))}">
+              <img src="${esc(c.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">
+            </button>`
+              )
+              .join('')}
+          </div>
+        </div>`;
+        })
+        .join('');
+  }
+
+  async function applyCoverByUrl(id, url) {
+    try {
+      const r = await fetch(`/api/songs/${id}/cover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast(d.error || '封面应用失败'); return; }
+      applyData(d);
+      closeCoverPicker();
+      toast('封面已更新');
+    } catch { toast('封面应用失败'); }
+  }
+
+  cpBody.addEventListener('click', (e) => {
+    const cand = e.target.closest('.cp-cand[data-url]');
+    if (cand && pickerSongId != null) applyCoverByUrl(pickerSongId, cand.dataset.url);
+  });
+
+  $('#cp-close').addEventListener('click', closeCoverPicker);
+  coverPicker.addEventListener('click', (e) => { if (e.target === coverPicker) closeCoverPicker(); });
+
+  cpUploadBtn.addEventListener('click', () => cpFile.click());
+  cpFile.addEventListener('change', async () => {
+    const file = cpFile.files[0];
+    cpFile.value = '';
+    const id = pickerSongId;
+    if (!file || id == null) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await fetch(`/api/songs/${id}/cover`, { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!r.ok) { toast(d.error || '封面上传失败'); return; }
+      applyData(d);
+      closeCoverPicker();
+      toast('封面已更新');
+    } catch { toast('封面上传失败'); }
+  });
+
+  // 入口一:展厅展签大封面
+  $('#p-cover').addEventListener('click', () => {
+    if (currentId != null) openCoverPicker(currentId);
   });
 
   /* ---------- 待配对歌词 ---------- */

@@ -50,7 +50,7 @@
     <section id="view-player" class="view">
       <aside class="label-card">
         <div class="no">No.<span id="p-no">—</span></div>
-        <div id="p-cover" data-mode="letter">
+        <div id="p-cover" data-mode="letter" title="选择 / 更换封面">
           <img id="p-cover-img" alt="封面">
           <span id="p-cover-letter" class="letter">乐</span>
         </div>
@@ -137,6 +137,24 @@
       </button>
     </div>
   </footer>
+
+  <!-- 封面选择:三源候选 + 自行上传 -->
+  <div id="cover-picker" hidden>
+    <div class="cp-box" role="dialog" aria-modal="true" aria-label="选择封面">
+      <div class="cp-head">
+        <span class="cp-title">选&nbsp;择&nbsp;封&nbsp;面</span>
+        <button id="cp-close" aria-label="关闭">&times;</button>
+      </div>
+      <div class="cp-song" id="cp-song"></div>
+      <div class="cp-body" id="cp-body"></div>
+      <div class="cp-foot">
+        <span class="cp-hint">点击候选即设为封面</span>
+        <span class="tb-flex"></span>
+        <button id="cp-upload-btn" class="tb-btn">上&nbsp;传&nbsp;图&nbsp;片</button>
+        <input type="file" id="cp-file" accept="image/png,image/jpeg,image/webp" hidden>
+      </div>
+    </div>
+  </div>
 
   <div id="toast"></div>
   <audio id="audio" preload="metadata"></audio>
