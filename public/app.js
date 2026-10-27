@@ -36,6 +36,9 @@
   const batchDel = $('#batch-del');
   const coverBtn = $('#coverBtn');
   const coverPicker = $('#cover-picker');
+  const playlistDrawer = $('#playlist-drawer');
+  const plList = $('#pl-list');
+  const plCount = $('#pl-count');
   const cpSong = $('#cp-song');
   const cpBody = $('#cp-body');
   const cpUploadBtn = $('#cp-upload-btn');
@@ -56,6 +59,7 @@
   let libMode = 'songs'; // 曲库视图:songs | albums
   let openAlbumKey = null; // 专辑页当前打开的专辑名
   let pickerSongId = null; // 封面选择弹窗针对的曲目
+  let playlistOpen = false; // 播放列表抽屉
   const selected = new Set();
   let armTimer;
 
@@ -116,6 +120,7 @@
   function enterQueue(album) {
     queue = album.tracks.map((t) => t.id);
     if (!queue.length) return;
+    if (playlistOpen) renderPlaylist(); // 队列变了,抽屉若开着必须同步
     // 已在该专辑内则不打断当前曲目,否则从第一首开始
     if (!queue.includes(currentId)) playById(queue[0]);
   }
@@ -132,6 +137,7 @@
     if (editing) for (const id of [...selected]) if (idxOf(id) < 0) selected.delete(id);
     renderLibrary();
     renderAlbums();
+    if (playlistOpen) renderPlaylist();
     renderPending();
     renderLabel();
     renderNowBar();
@@ -167,13 +173,19 @@
     renderNowBar();
     renderLibrary();
     if (openAlbumKey) renderAlbums(); // 专辑详情页内的当前播放高亮
+    if (playlistOpen) renderPlaylist(); // 播放列表内的当前高亮
     loadLyrics(s.id);
     updateMediaSession();
   }
 
+  // 当前生效的播放顺序:专辑队列,否则全部曲目
+  function playOrder() {
+    return queue && queue.includes(currentId) ? queue : songs.map((s) => s.id);
+  }
+
   // 上下曲在播放队列内循环:专辑播放时只在专辑内切换
   function step(d) {
-    const order = queue && queue.includes(currentId) ? queue : songs.map((s) => s.id);
+    const order = playOrder();
     if (!order.length) return;
     let i = order.indexOf(currentId);
     i = i < 0 ? 0 : (i + d + order.length) % order.length;
@@ -356,6 +368,48 @@
   $('#prevBtn').addEventListener('click', () => step(-1));
   $('#nextBtn').addEventListener('click', () => step(1));
 
+  /* ---------- 播放列表抽屉 ---------- */
+  function renderPlaylist() {
+    const order = playOrder();
+    plCount.textContent = `${order.length} 首${queue && queue.includes(currentId) ? ' · 专辑内循环' : ''}`;
+    plList.innerHTML = order
+      .map((id, i) => {
+        const s = songs.find((x) => x.id === id);
+        if (!s) return '';
+        const now = id === currentId;
+        return `
+        <div class="pl-row${now ? ' now' : ''}" data-id="${id}">
+          <div class="pl-no">${now ? '<span class="dot"></span>' : ''}No.${pad2(i + 1)}</div>
+          <div class="pl-main">
+            <div class="pl-title">${esc(s.title)}</div>
+            <div class="pl-sub">${esc(s.artist || '未知艺术家')}</div>
+          </div>
+          <div class="pl-dur">${s.duration ? fmt(s.duration) : '—'}</div>
+        </div>`;
+      })
+      .join('');
+    plList.querySelector('.pl-row.now')?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function openPlaylist() {
+    playlistOpen = true;
+    playlistDrawer.hidden = false;
+    renderPlaylist();
+  }
+
+  function closePlaylist() {
+    playlistOpen = false;
+    playlistDrawer.hidden = true;
+  }
+
+  $('#playlistBtn').addEventListener('click', () => (playlistOpen ? closePlaylist() : openPlaylist()));
+  $('#pl-close').addEventListener('click', closePlaylist);
+  playlistDrawer.addEventListener('click', (e) => { if (e.target === playlistDrawer) closePlaylist(); });
+  plList.addEventListener('click', (e) => {
+    const row = e.target.closest('.pl-row');
+    if (row) playById(Number(row.dataset.id)); // 抽屉保持展开,便于连续选曲
+  });
+
   /* ---------- 入口幕布 ---------- */
   enterBtn.addEventListener('click', () => {
     curtain.classList.add('hidden');
@@ -372,6 +426,7 @@
       if (e.key === 'Escape') closeCoverPicker();
       return;
     }
+    if (playlistOpen && e.key === 'Escape') { closePlaylist(); return; }
     if (document.contains(curtain)) {
       if (e.key === 'Enter') enterBtn.click();
       return;
@@ -406,18 +461,15 @@
     if (!songs.length) {
       if (editing) setEditing(false);
       editBtn.hidden = true;
-      coverBtn.hidden = true;
       songList.innerHTML = '<div class="empty">曲库暂无藏品 · 请前往「入藏」</div>';
       return;
     }
     if (libMode === 'albums') {
       editBtn.hidden = true;
-      coverBtn.hidden = true;
       renderLibByAlbum();
       return;
     }
     editBtn.hidden = editing;
-    coverBtn.hidden = editing;
     songList.innerHTML = songs.map((s, i) => songRowHTML(s, i + 1, { selectable: true })).join('');
   }
 
@@ -462,6 +514,7 @@
     viewLib.classList.toggle('editing', on);
     libToolbar.hidden = !on;
     updateSelUI();
+    updateCoverBtn(lastCoverSt); // 补封面按钮随编辑模式显隐
     renderLibrary();
   }
 
@@ -624,6 +677,7 @@
     const a = albumByKey(el.dataset.alb);
     if (!a) return;
     queue = a.tracks.map((t) => t.id);
+    if (playlistOpen) renderPlaylist();
     openAlbumKey = a.name;
     renderAlbums();
     show('albums');
@@ -631,14 +685,17 @@
 
   /* ---------- 封面自动补全 ---------- */
   let seenRun = -1;
+  let lastCoverSt = null; // 最近一次补全状态,供编辑模式切换时恢复按钮可见性
 
   function updateCoverBtn(st) {
+    if (!st) return;
+    lastCoverSt = st;
     if (st.running) {
-      coverBtn.hidden = editing;
+      coverBtn.hidden = !editing; // 补封面只存在于编辑工具栏
       coverBtn.disabled = true;
       coverBtn.textContent = `补封面 ${st.done}/${st.total}`;
     } else {
-      coverBtn.hidden = !songs.length || editing;
+      coverBtn.hidden = !editing;
       coverBtn.disabled = !st.missing;
       coverBtn.textContent = '补 封 面';
       // seenRun 只在空闲分支更新:从 -1 起步,页面加载中若撞上正在收尾的旧任务不误报

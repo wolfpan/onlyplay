@@ -77,7 +77,6 @@
             <button id="mode-songs" class="tb-btn on">全部歌曲</button>
             <button id="mode-albums" class="tb-btn">专辑列表</button>
           </div>
-          <button id="coverBtn" class="tb-btn" hidden>补&nbsp;封&nbsp;面</button>
           <button id="editBtn" class="tb-btn">编&nbsp;辑</button>
         </div>
       </div>
@@ -85,6 +84,7 @@
         <button id="sel-all" class="sel-all"><span class="cbox"></span>全&nbsp;选</button>
         <span id="sel-count" class="sel-count"></span>
         <span class="tb-flex"></span>
+        <button id="coverBtn" class="tb-btn" hidden>补&nbsp;封&nbsp;面</button>
         <button id="batch-del" class="tb-btn danger">移&nbsp;除</button>
         <button id="edit-done" class="tb-btn">完&nbsp;成</button>
       </div>
@@ -126,6 +126,9 @@
       </div>
     </div>
     <div class="pb-right">
+      <button class="ctrl" id="playlistBtn" title="播放列表">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h12v2H3zM3 9h12v2H3zM3 13h8v2H3zM16.5 13v7l5.5-3.5z"/></svg>
+      </button>
       <button class="ctrl" id="prevBtn" title="上一首">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7zm12 0v14l-9-7z"/></svg>
       </button>
@@ -137,6 +140,19 @@
       </button>
     </div>
   </footer>
+
+  <!-- 播放列表抽屉 -->
+  <div id="playlist-drawer" hidden>
+    <div class="pl-box" role="dialog" aria-label="播放列表">
+      <div class="pl-head">
+        <span class="pl-title">播&nbsp;放&nbsp;列&nbsp;表</span>
+        <span class="pl-count" id="pl-count"></span>
+        <span class="tb-flex"></span>
+        <button id="pl-close" aria-label="关闭">&times;</button>
+      </div>
+      <div class="pl-list" id="pl-list"></div>
+    </div>
+  </div>
 
   <!-- 封面选择:三源候选 + 自行上传 -->
   <div id="cover-picker" hidden>
