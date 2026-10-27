@@ -26,6 +26,9 @@
   const playBtn = $('#playBtn');
   const toastEl = $('#toast');
   const viewLib = $('#view-library');
+  const albWrap = $('#alb-wrap');
+  const modeSongs = $('#mode-songs');
+  const modeAlbums = $('#mode-albums');
   const editBtn = $('#editBtn');
   const libToolbar = $('#lib-toolbar');
   const selAll = $('#sel-all');
@@ -44,6 +47,9 @@
   let curLine = -1;
   let seeking = false;
   let editing = false;
+  let queue = null; // 专辑播放队列:null = 全部曲目顺序播放
+  let libMode = 'songs'; // 曲库视图:songs | albums
+  let openAlbumKey = null; // 专辑页当前打开的专辑名
   const selected = new Set();
   let armTimer;
 
@@ -84,12 +90,42 @@
   }
 
   /* ---------- 数据 ---------- */
+  // 按专辑名分组,保持入藏顺序;无专辑信息的曲目归入「未命名专辑」
+  function buildAlbums() {
+    const map = new Map();
+    for (const s of songs) {
+      const name = (s.album || '').trim() || '未命名专辑';
+      let a = map.get(name);
+      if (!a) { a = { name, artist: '', tracks: [] }; map.set(name, a); }
+      a.tracks.push(s);
+      if (!a.artist && s.artist) a.artist = s.artist;
+    }
+    return [...map.values()];
+  }
+
+  function albumByKey(name) {
+    return buildAlbums().find((a) => a.name === name) || null;
+  }
+
+  function enterQueue(album) {
+    queue = album.tracks.map((t) => t.id);
+    if (!queue.length) return;
+    // 已在该专辑内则不打断当前曲目,否则从第一首开始
+    if (!queue.includes(currentId)) playById(queue[0]);
+  }
+
   function applyData(d) {
     if (d.songs) songs = d.songs;
     if (d.pendingLyrics) pending = d.pendingLyrics;
     if (currentId != null && idxOf(currentId) < 0) clearPlayer();
+    if (queue) {
+      queue = queue.filter((id) => idxOf(id) >= 0);
+      if (!queue.length) queue = null;
+    }
+    if (openAlbumKey && !albumByKey(openAlbumKey)) openAlbumKey = null;
     if (editing) for (const id of [...selected]) if (idxOf(id) < 0) selected.delete(id);
     renderLibrary();
+    renderAlbums();
     renderPending();
     renderLabel();
     renderNowBar();
@@ -124,15 +160,18 @@
     renderLabel();
     renderNowBar();
     renderLibrary();
+    if (openAlbumKey) renderAlbums(); // 专辑详情页内的当前播放高亮
     loadLyrics(s.id);
     updateMediaSession();
   }
 
+  // 上下曲在播放队列内循环:专辑播放时只在专辑内切换
   function step(d) {
-    if (!songs.length) return;
-    let i = idxOf(currentId);
-    i = i < 0 ? 0 : (i + d + songs.length) % songs.length;
-    playById(songs[i].id);
+    const order = queue && queue.includes(currentId) ? queue : songs.map((s) => s.id);
+    if (!order.length) return;
+    let i = order.indexOf(currentId);
+    i = i < 0 ? 0 : (i + d + order.length) % order.length;
+    playById(order[i]);
   }
 
   function togglePlay() {
@@ -164,7 +203,12 @@
     $('#p-no').textContent = s ? pad2(i + 1) : '—';
     $('#p-title').textContent = s ? s.title : '静候入藏';
     $('#p-artist').textContent = s ? (s.artist || '未知艺术家') : '曲库尚无藏品';
-    $('#p-meta').textContent = s ? [s.album, s.duration ? fmt(s.duration) : ''].filter(Boolean).join(' · ') : '';
+    $('#p-meta').innerHTML = s
+      ? [
+          s.album ? `<span class="linkish" data-alb="${esc(s.album)}" title="查看专辑">${esc(s.album)}</span>` : '',
+          s.duration ? fmt(s.duration) : '',
+        ].filter(Boolean).join(' · ')
+      : '';
     const cover = $('#p-cover');
     if (s && s.hasCover) {
       $('#p-cover-img').src = `/api/cover/${s.id}`;
@@ -329,6 +373,22 @@
   });
 
   /* ---------- 曲库 ---------- */
+  const coverHTML = (id, has, letter) =>
+    has ? `<img src="/api/cover/${id}" alt="" loading="lazy">` : `<span class="letter">${esc(letter)}</span>`;
+
+  const songRowHTML = (s, no, { bare = false, selectable = false } = {}) => `
+    <div class="row${bare ? ' bare' : ''}${s.id === currentId ? ' now' : ''}${selectable && selected.has(s.id) ? ' sel' : ''}" data-id="${s.id}">
+      ${selectable ? '<div class="r-check"><span class="cbox"></span></div>' : ''}
+      ${bare ? '' : `<div class="r-cover">${coverHTML(s.id, s.hasCover, [...s.title][0] || '乐')}</div>`}
+      <div class="r-no">${s.id === currentId ? '<span class="dot"></span>' : ''}No.${pad2(no)}</div>
+      <div class="r-main">
+        <div class="r-title">${esc(s.title)}</div>
+        <div class="r-sub">${esc(s.artist || '未知艺术家')}</div>
+      </div>
+      <div class="r-lrc${s.hasLyrics ? '' : ' none'}">${s.hasLyrics ? '有词' : '无词'}</div>
+      <div class="r-dur">${s.duration ? fmt(s.duration) : '—'}</div>
+    </div>`;
+
   function renderLibrary() {
     if (!songs.length) {
       if (editing) setEditing(false);
@@ -337,28 +397,48 @@
       songList.innerHTML = '<div class="empty">曲库暂无藏品 · 请前往「入藏」</div>';
       return;
     }
+    if (libMode === 'albums') {
+      editBtn.hidden = true;
+      coverBtn.hidden = true;
+      renderLibByAlbum();
+      return;
+    }
     editBtn.hidden = editing;
     coverBtn.hidden = editing;
-    songList.innerHTML = songs
-      .map((s, i) => {
-        const now = s.id === currentId;
+    songList.innerHTML = songs.map((s, i) => songRowHTML(s, i + 1, { selectable: true })).join('');
+  }
+
+  // 曲库「专辑列表」:按专辑分组,组头可整张播放
+  function renderLibByAlbum() {
+    songList.innerHTML = buildAlbums()
+      .map((a) => {
+        const cov = a.tracks.find((t) => t.hasCover);
         return `
-        <div class="row${now ? ' now' : ''}${selected.has(s.id) ? ' sel' : ''}" data-id="${s.id}">
-          <div class="r-check"><span class="cbox"></span></div>
-          <div class="r-cover">${s.hasCover
-            ? `<img src="/api/cover/${s.id}" alt="" loading="lazy">`
-            : `<span class="letter">${esc([...s.title][0] || '乐')}</span>`}</div>
-          <div class="r-no">${now ? '<span class="dot"></span>' : ''}No.${pad2(i + 1)}</div>
-          <div class="r-main">
-            <div class="r-title">${esc(s.title)}</div>
-            <div class="r-sub">${esc(s.artist || '未知艺术家')}</div>
+        <div class="alg-group" data-key="${esc(a.name)}">
+          <div class="alg-head">
+            <div class="alg-cover">${coverHTML(cov ? cov.id : '', !!cov, [...a.name][0] || '乐')}</div>
+            <div class="alg-info">
+              <div class="alg-name">${esc(a.name)}</div>
+              <div class="alg-sub">${esc(a.artist || '未知艺术家')} · ${a.tracks.length} 首</div>
+            </div>
+            <button class="tb-btn alg-play">播 放</button>
           </div>
-          <div class="r-lrc${s.hasLyrics ? '' : ' none'}">${s.hasLyrics ? '有词' : '无词'}</div>
-          <div class="r-dur">${s.duration ? fmt(s.duration) : '—'}</div>
+          ${a.tracks.map((t, ti) => songRowHTML(t, ti + 1, { bare: true })).join('')}
         </div>`;
       })
       .join('');
   }
+
+  function setLibMode(m) {
+    if (libMode === m) return;
+    libMode = m;
+    modeSongs.classList.toggle('on', m === 'songs');
+    modeAlbums.classList.toggle('on', m === 'albums');
+    if (m === 'albums' && editing) setEditing(false);
+    renderLibrary();
+  }
+  modeSongs.addEventListener('click', () => setLibMode('songs'));
+  modeAlbums.addEventListener('click', () => setLibMode('albums'));
 
   /* 编辑模式:全选 / 多选 / 批量移除(二次确认) */
   function setEditing(on) {
@@ -427,12 +507,111 @@
   batchDel.addEventListener('click', removeSelected);
 
   songList.addEventListener('click', (e) => {
+    if (libMode === 'albums') {
+      const playBtn = e.target.closest('.alg-play');
+      const g = playBtn && playBtn.closest('.alg-group');
+      if (g) {
+        const a = albumByKey(g.dataset.key);
+        if (a) enterQueue(a);
+        return;
+      }
+    }
     const row = e.target.closest('.row');
     if (!row) return;
     const id = Number(row.dataset.id);
     if (editing) { toggleSel(id); return; }
+    if (libMode === 'albums') {
+      const g = row.closest('.alg-group');
+      const a = g && albumByKey(g.dataset.key);
+      queue = a ? a.tracks.map((t) => t.id) : null;
+    } else {
+      queue = null;
+    }
     playById(id);
     show('player');
+  });
+
+  /* ---------- 专辑 ---------- */
+  // 专辑页:网格 → 点击进入专辑详情并从第一首播放;上一首/下一首只在专辑内循环
+  function renderAlbums() {
+    const albums = buildAlbums();
+    if (!albums.length) {
+      albWrap.innerHTML = '<div class="empty">曲库暂无藏品 · 请前往「入藏」</div>';
+      return;
+    }
+    const a = openAlbumKey ? albumByKey(openAlbumKey) : null;
+    if (!a) {
+      openAlbumKey = null;
+      albWrap.innerHTML =
+        '<div class="lib-head"><h2 class="view-title">专&nbsp;辑</h2>' +
+        `<span class="alb-count">${albums.length} 张专辑</span></div>` +
+        '<div class="alb-grid">' +
+        albums
+          .map((x) => {
+            const cov = x.tracks.find((t) => t.hasCover);
+            return `
+            <div class="alb-card" data-key="${esc(x.name)}">
+              <div class="alb-cover">${coverHTML(cov ? cov.id : '', !!cov, [...x.name][0] || '乐')}</div>
+              <div class="alb-name">${esc(x.name)}</div>
+              <div class="alb-sub">${esc(x.artist || '未知艺术家')} · ${x.tracks.length} 首</div>
+            </div>`;
+          })
+          .join('') +
+        '</div>';
+      return;
+    }
+    const dur = a.tracks.reduce((t, s) => t + (s.duration || 0), 0);
+    const cov = a.tracks.find((t) => t.hasCover);
+    albWrap.innerHTML =
+      '<div class="lib-head"><h2 class="view-title">专&nbsp;辑</h2><button class="tb-btn" id="alb-back">返&nbsp;回</button></div>' +
+      `<div class="alb-head">
+        <div class="alb-bigcover">${coverHTML(cov ? cov.id : '', !!cov, [...a.name][0] || '乐')}</div>
+        <div class="alb-headinfo">
+          <div class="alb-name">${esc(a.name)}</div>
+          <div class="alb-sub">${esc(a.artist || '未知艺术家')} · ${a.tracks.length} 首 · ${fmt(dur)}</div>
+          <button class="tb-btn" id="alb-playall">播&nbsp;放&nbsp;专&nbsp;辑</button>
+        </div>
+      </div>` +
+      '<div class="alb-tracks">' +
+      a.tracks.map((t, ti) => songRowHTML(t, ti + 1, { bare: true })).join('') +
+      '</div>';
+  }
+
+  albWrap.addEventListener('click', (e) => {
+    if (e.target.closest('#alb-back')) { openAlbumKey = null; renderAlbums(); return; }
+    if (e.target.closest('#alb-playall')) {
+      const a = openAlbumKey && albumByKey(openAlbumKey);
+      if (a) enterQueue(a);
+      return;
+    }
+    const card = e.target.closest('.alb-card');
+    if (card) {
+      const a = albumByKey(card.dataset.key);
+      if (!a) return;
+      openAlbumKey = a.name;
+      renderAlbums();
+      enterQueue(a); // 点击专辑即进入专辑播放
+      return;
+    }
+    const row = e.target.closest('.row');
+    if (!row || !openAlbumKey) return;
+    const a = albumByKey(openAlbumKey);
+    if (a && a.tracks.some((t) => t.id === Number(row.dataset.id))) {
+      queue = a.tracks.map((t) => t.id);
+      playById(Number(row.dataset.id));
+    }
+  });
+
+  // 展签上的专辑名可点击,跳到专辑页并把上下曲限定在该专辑
+  $('#p-meta').addEventListener('click', (e) => {
+    const el = e.target.closest('.linkish');
+    if (!el) return;
+    const a = albumByKey(el.dataset.alb);
+    if (!a) return;
+    queue = a.tracks.map((t) => t.id);
+    openAlbumKey = a.name;
+    renderAlbums();
+    show('albums');
   });
 
   /* ---------- 封面自动补全 ---------- */

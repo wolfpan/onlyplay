@@ -103,11 +103,12 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .view { display: none; height: 100%; }
 .view.active { animation: rise .7s ease both; }
 #view-player.active { display: grid; grid-template-columns: 340px 1fr; gap: 48px; padding: 26px 48px 10px; }
-#view-library.active, #view-upload.active {
+#view-library.active, #view-upload.active, #view-albums.active {
   display: block; overflow-y: auto;
   width: 100%; max-width: 980px; margin: 0 auto;
   padding: 36px 48px 56px;
 }
+#view-albums.active { max-width: 1100px; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 .view-title {
@@ -166,7 +167,13 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 
 /* ---------------- 曲库 ---------------- */
 .lib-head { display: flex; align-items: baseline; justify-content: space-between; }
-.lib-head-btns { display: flex; gap: 12px; }
+.lib-head-btns { display: flex; gap: 12px; align-items: center; }
+
+.lib-toggle { display: flex; gap: 8px; }
+.lib-toggle .tb-btn.on { color: var(--ink); border-color: var(--ink); }
+
+.linkish { cursor: pointer; border-bottom: 1px dotted var(--faint); transition: color .3s, border-color .3s; }
+.linkish:hover { color: var(--ink); border-color: var(--dim); }
 
 #lib-toolbar {
   display: flex; align-items: center; flex-wrap: wrap;
@@ -238,6 +245,57 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .r-lrc.none { color: var(--faint); }
 .r-dur { font-size: .78rem; color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
 .empty { color: var(--dim); letter-spacing: .2em; padding: 70px 0; text-align: center; }
+
+/* 专辑列表模式下无行内封面 */
+.row.bare { grid-template-columns: 92px 1fr 60px 58px; }
+
+/* 曲库 · 专辑列表分组 */
+.alg-group { margin-bottom: 36px; }
+.alg-head { display: flex; align-items: center; gap: 16px; padding: 4px 4px 14px; }
+.alg-cover {
+  width: 52px; height: 52px; border: 1px solid var(--line); padding: 4px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex: none; transition: border-color .6s;
+}
+.alg-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.alg-cover .letter { font-size: 20px; color: var(--faint); line-height: 1; }
+.alg-info { flex: 1; min-width: 0; }
+.alg-name { font-size: 1.05rem; line-height: 1.4; }
+.alg-sub { color: var(--dim); font-size: .78rem; margin-top: 3px; letter-spacing: .08em; }
+
+/* ---------------- 专辑页 ---------------- */
+.alb-count { font-size: .78rem; color: var(--dim); letter-spacing: .18em; }
+
+.alb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 36px 28px; padding-top: 6px; }
+.alb-card { cursor: pointer; min-width: 0; }
+.alb-cover {
+  width: 100%; aspect-ratio: 1 / 1;
+  border: 1px solid var(--line); padding: 10px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; transition: border-color .35s;
+}
+.alb-card:hover .alb-cover { border-color: var(--dim); }
+.alb-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.alb-cover .letter { font-size: 56px; color: var(--faint); line-height: 1; }
+.alb-name { margin-top: 12px; font-size: 1rem; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alb-sub { margin-top: 3px; color: var(--dim); font-size: .78rem; letter-spacing: .08em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.alb-head {
+  display: flex; align-items: flex-end; gap: 28px;
+  padding: 4px 0 28px; border-bottom: 1px solid var(--line);
+  transition: border-color .6s;
+}
+.alb-bigcover {
+  width: 180px; height: 180px; border: 1px solid var(--line); padding: 10px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex: none; transition: border-color .6s;
+}
+.alb-bigcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.alb-bigcover .letter { font-size: 72px; color: var(--faint); line-height: 1; }
+.alb-headinfo { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding-bottom: 4px; min-width: 0; }
+.alb-headinfo .alb-name { font-size: 1.5rem; font-weight: 600; margin: 0; white-space: normal; }
+.alb-headinfo .alb-sub { white-space: normal; }
+.alb-tracks { padding-top: 4px; }
 
 /* ---------------- 入藏 ---------------- */
 #dropzone {
@@ -338,12 +396,22 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
   #p-title { font-size: 1.15rem; }
   #lyrics-inner { padding: 24vh 6% 30vh; }
 
-  #view-library.active, #view-upload.active { padding: 24px 20px 48px; }
+  #view-library.active, #view-upload.active, #view-albums.active { padding: 24px 20px 48px; }
   .row { grid-template-columns: 36px 64px 1fr; }
+  .row.bare { grid-template-columns: 56px 1fr; }
   #view-library.editing .row { grid-template-columns: 30px 36px 64px 1fr; }
   .r-cover { width: 36px; height: 36px; }
   .r-cover .letter { font-size: 16px; }
   .r-lrc, .r-dur { display: none; }
+
+  .lib-toggle .tb-btn { padding: 7px 10px 7px 13px; }
+  .alb-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 26px 16px; }
+  .alb-cover { padding: 6px; }
+  .alb-cover .letter { font-size: 40px; }
+  .alb-head { flex-direction: column; align-items: flex-start; gap: 16px; padding-bottom: 20px; }
+  .alb-bigcover { width: 120px; height: 120px; }
+  .alg-head { gap: 12px; }
+  .alg-cover { width: 44px; height: 44px; }
 
   #playerbar { grid-template-columns: 1fr auto; gap: 10px 16px; padding: 10px 18px 14px; }
   .pb-center { grid-column: 1 / -1; grid-row: 1; }

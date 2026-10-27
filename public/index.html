@@ -34,6 +34,7 @@
     <div class="wordmark">ONLY&nbsp;PLAY</div>
     <nav>
       <button class="navlink" data-view="player">展&nbsp;厅</button>
+      <button class="navlink" data-view="albums">专&nbsp;辑</button>
       <button class="navlink" data-view="library">曲&nbsp;库</button>
       <button class="navlink" data-view="upload">入&nbsp;藏</button>
       <button id="themeBtn" aria-label="切换白天 / 夜间" title="切换白天 / 夜间">
@@ -62,11 +63,20 @@
       </div>
     </section>
 
+    <!-- 专辑 -->
+    <section id="view-albums" class="view">
+      <div id="alb-wrap"></div>
+    </section>
+
     <!-- 曲库 -->
     <section id="view-library" class="view">
       <div class="lib-head">
         <h2 class="view-title">曲&nbsp;库</h2>
         <div class="lib-head-btns">
+          <div class="lib-toggle" id="libToggle">
+            <button id="mode-songs" class="tb-btn on">全部歌曲</button>
+            <button id="mode-albums" class="tb-btn">专辑列表</button>
+          </div>
           <button id="coverBtn" class="tb-btn" hidden>补&nbsp;封&nbsp;面</button>
           <button id="editBtn" class="tb-btn">编&nbsp;辑</button>
         </div>
