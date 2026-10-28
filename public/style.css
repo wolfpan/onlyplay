@@ -404,8 +404,8 @@ button:focus-visible, select:focus-visible, [tabindex]:focus-visible {
 .pl-dur { font-size: .76rem; color: var(--dim); font-variant-numeric: tabular-nums; text-align: right; }
 
 /* ---------------- 封面选择 ---------------- */
-#p-cover { cursor: pointer; }
-#view-library:not(.editing) .r-cover { cursor: pointer; }
+/* 换封面只在曲库编辑模式下进行:行首小封面提示可点 */
+#view-library.editing .r-cover { cursor: pointer; }
 
 #cover-picker {
   position: fixed; inset: 0; z-index: 55;

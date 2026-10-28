@@ -614,9 +614,9 @@
     const row = e.target.closest('.row');
     if (!row) return;
     const id = Number(row.dataset.id);
+    // 封面管理仅在编辑模式:点行首小封面打开封面选择,其余位置仍是多选
+    if (editing && e.target.closest('.r-cover')) { openCoverPicker(id); return; }
     if (editing) { toggleSel(id); return; }
-    // 入口二:曲库行首的小封面,点击管理封面而非播放
-    if (libMode === 'songs' && e.target.closest('.r-cover')) { openCoverPicker(id); return; }
     if (libMode === 'albums') {
       const g = row.closest('.alg-group');
       const a = g && albumByKey(g.dataset.key);
@@ -867,11 +867,6 @@
       closeCoverPicker();
       toast('封面已更新');
     } catch { toast('封面上传失败'); }
-  });
-
-  // 入口一:展厅展签大封面
-  $('#p-cover').addEventListener('click', () => {
-    if (currentId != null) openCoverPicker(currentId);
   });
 
   /* ---------- 待配对歌词 ---------- */
